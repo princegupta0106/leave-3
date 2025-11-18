@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parent's Consent Form Generator</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-TE4G296Y9R"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-TE4G296Y9R');
+</script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>    <!-- Cropper.js for image cropping -->    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <h1>Parent's Consent Form Generator</h1>
+                <div class="auth-controls">
+                    <button id="firebaseLoginBtn">Log in</button>
+                    <span id="authUserName" class="auth-username"></span>
+                </div>
+            </div>
+            <p>Sign in to fill all details from database</p>
+        </header>
+
+        <form id="consentForm" class="consent-form">
+            <div class="form-section">
+                <h2>Student Information</h2>
+                <div class="form-group">
+                    <label for="studentName">Student Name:</label>
+                    <input type="text" id="studentName" name="studentName" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="studentId">Student ID Number:</label>
+                    <input type="text" id="studentId" name="studentId" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bhawan">Bhawan Name:</label>
+                    <input type="text" id="bhawan" name="bhawan" placeholder="e.g., Krishna, Ram, Vyas" required>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2>Leave Details</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="leaveFrom">Leave From:</label>
+                        <input type="date" id="leaveFrom" name="leaveFrom" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="leaveTo">Leave To:</label>
+                        <input type="date" id="leaveTo" name="leaveTo" required>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2>Parent/Guardian Information</h2>
+                <div class="form-group">
+                    <label for="parentName">Full Name of Parent/Guardian:</label>
+                    <input type="text" id="parentName" name="parentName" required>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="place">Place:</label>
+                        <input type="text" id="place" name="place" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="date">Date:</label>
+                        <input type="date" id="date" name="date" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="mobile">Mobile Number:</label>
+                    <input type="tel" id="mobile" name="mobile" pattern="[0-9]{10}" placeholder="10-digit mobile number" required>
+                </div>
+            </div>
+
+            <div class="form-section">
+                <h2>Signature</h2>
+                <div class="form-group">
+                    <label for="signature">Upload Signature (Image file):</label>
+                    <input type="file" id="signature" name="signature" accept="image/*">
+                    <button type="button" id="uploadSignatureBtn" class="upload-btn hidden">Upload & Process</button>
+                    <small>Please upload a clear image of your signature (JPG, PNG, etc.)</small>
+                    <div class="signature-preview-wrap">
+                        <img id="signaturePreview" class="hidden" alt="Signature preview" />
+                        <span id="signaturePlaceholder" style="color: #7f8c8d; font-style: italic;">No signature uploaded yet</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Image Editor Modal -->
+            <div id="imageEditorModal" class="modal hidden">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Crop & Rotate Your Signature</h3>
+                        <button type="button" id="closeModal" class="close-btn">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="editor-controls">
+                            <button type="button" id="rotateLeft" class="editor-btn">↺ Rotate Left</button>
+                            <button type="button" id="rotateRight" class="editor-btn">↻ Rotate Right</button>
+                            <button type="button" id="resetCrop" class="editor-btn">🔄 Reset</button>
+                            <button type="button" id="zoomIn" class="editor-btn">🔍+ Zoom In</button>
+                            <button type="button" id="zoomOut" class="editor-btn">🔍- Zoom Out</button>
+                        </div>
+                        <div class="image-editor-container">
+                            <img id="cropImage" alt="Image to crop">
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" id="cancelCrop" class="cancel-btn">Cancel</button>
+                            <button type="button" id="applyCrop" class="apply-btn">Apply & Upload</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" id="generatePdf">Generate & Download PDF</button>
+                <button type="reset" id="resetForm">Reset Form</button>
+                <button type="button" id="applyLeave">Apply Now</button>
+            </div>
+        </form>
+
+        <div id="loading" class="loading hidden">
+            <p>Generating PDF... Please wait</p>
+        </div>
+    </div>
+
+    <script type="module" src="script.js"></script>
+    <script type="module" src="firebase-auth.js"></script>
+</body>
+</html>
