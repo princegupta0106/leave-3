@@ -102,27 +102,34 @@
                 </div>
             </div>
 
-            <!-- Image Editor Modal -->
-            <div id="imageEditorModal" class="modal hidden">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h3>Crop & Rotate Your Signature</h3>
-                        <button type="button" id="closeModal" class="close-btn">&times;</button>
+            <!-- Signature Editor Modal -->
+            <div id="signatureEditorModal" class="signature-modal">
+                <div class="signature-modal-overlay"></div>
+                <div class="signature-modal-container">
+                    <div class="signature-modal-header">
+                        <h3>Edit Your Signature</h3>
+                        <button type="button" id="closeSignatureModal" class="signature-close-btn">
+                            <span>&times;</span>
+                        </button>
                     </div>
-                    <div class="modal-body">
-                        <div class="editor-controls">
-                            <button type="button" id="rotateLeft" class="editor-btn">↺ Rotate Left</button>
-                            <button type="button" id="rotateRight" class="editor-btn">↻ Rotate Right</button>
-                            <button type="button" id="resetCrop" class="editor-btn">🔄 Reset</button>
-                            <button type="button" id="zoomIn" class="editor-btn">🔍+ Zoom In</button>
-                            <button type="button" id="zoomOut" class="editor-btn">🔍- Zoom Out</button>
+                    <div class="signature-modal-content">
+                        <div class="signature-editor-toolbar">
+                            <button type="button" id="rotateLeftBtn" class="toolbar-btn">
+                                <span>↺</span> Rotate Left
+                            </button>
+                            <button type="button" id="rotateRightBtn" class="toolbar-btn">
+                                <span>↻</span> Rotate Right
+                            </button>
+                            <button type="button" id="resetCropBtn" class="toolbar-btn">
+                                <span>🔄</span> Reset
+                            </button>
                         </div>
-                        <div class="image-editor-container">
-                            <img id="cropImage" alt="Image to crop">
+                        <div class="signature-editor-workspace">
+                            <img id="signatureEditImage" alt="Signature to edit">
                         </div>
-                        <div class="modal-actions">
-                            <button type="button" id="cancelCrop" class="cancel-btn">Cancel</button>
-                            <button type="button" id="applyCrop" class="apply-btn">Apply & Upload</button>
+                        <div class="signature-modal-actions">
+                            <button type="button" id="cancelSignatureEdit" class="btn-cancel">Cancel</button>
+                            <button type="button" id="applySignatureEdit" class="btn-apply">Apply Changes</button>
                         </div>
                     </div>
                 </div>

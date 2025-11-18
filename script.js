@@ -49,15 +49,16 @@ document.addEventListener('DOMContentLoaded', function() {
     // Add upload button handler
     document.getElementById('uploadSignatureBtn').addEventListener('click', showImageEditor);
     
-    // Add modal handlers
-    document.getElementById('closeModal').addEventListener('click', closeImageEditor);
-    document.getElementById('cancelCrop').addEventListener('click', closeImageEditor);
-    document.getElementById('applyCrop').addEventListener('click', processAndUploadImage);
-    document.getElementById('rotateLeft').addEventListener('click', () => rotateImage(-90));
-    document.getElementById('rotateRight').addEventListener('click', () => rotateImage(90));
-    document.getElementById('resetCrop').addEventListener('click', resetCrop);
-    document.getElementById('zoomIn').addEventListener('click', () => zoomImage(0.1));
-    document.getElementById('zoomOut').addEventListener('click', () => zoomImage(-0.1));
+    // Add signature editor modal handlers
+    document.getElementById('closeSignatureModal').addEventListener('click', closeSignatureEditor);
+    document.getElementById('cancelSignatureEdit').addEventListener('click', closeSignatureEditor);
+    document.getElementById('applySignatureEdit').addEventListener('click', processAndUploadSignature);
+    document.getElementById('rotateLeftBtn').addEventListener('click', () => rotateSignature(-90));
+    document.getElementById('rotateRightBtn').addEventListener('click', () => rotateSignature(90));
+    document.getElementById('resetCropBtn').addEventListener('click', resetSignatureCrop);
+    
+    // Close modal when clicking overlay
+    document.querySelector('.signature-modal-overlay').addEventListener('click', closeSignatureEditor);
     
     // Add apply for leave button handler
     document.getElementById('applyLeave').addEventListener('click', function() {
@@ -81,41 +82,42 @@ function handleFileSelection(event) {
     }
 }
 
-// Show image editor modal
+// Show signature editor modal
 function showImageEditor() {
     if (!selectedFile) return;
     
-    const modal = document.getElementById('imageEditorModal');
-    const cropImage = document.getElementById('cropImage');
+    const modal = document.getElementById('signatureEditorModal');
+    const editImage = document.getElementById('signatureEditImage');
     
     const reader = new FileReader();
     reader.onload = function(e) {
-        cropImage.src = e.target.result;
-        modal.classList.remove('hidden');
+        editImage.src = e.target.result;
+        modal.classList.add('active');
         
         // Initialize cropper after image loads
-        cropImage.onload = function() {
-            initializeCropper();
+        editImage.onload = function() {
+            initializeSignatureCropper();
         };
     };
     reader.readAsDataURL(selectedFile);
 }
 
-// Initialize cropper (using Cropper.js library)
-function initializeCropper() {
+// Initialize signature cropper (using Cropper.js library)
+function initializeSignatureCropper() {
     // Destroy existing cropper if any
     if (cropper) {
         cropper.destroy();
+        cropper = null;
     }
     
-    const cropImage = document.getElementById('cropImage');
+    const editImage = document.getElementById('signatureEditImage');
     currentRotation = 0;
     
-    // Initialize Cropper.js
-    cropper = new Cropper(cropImage, {
+    // Initialize Cropper.js with improved settings
+    cropper = new Cropper(editImage, {
         aspectRatio: NaN, // Free aspect ratio
-        viewMode: 1,
-        autoCropArea: 0.8,
+        viewMode: 2,
+        autoCropArea: 0.95,
         responsive: true,
         restore: false,
         guides: true,
@@ -125,62 +127,73 @@ function initializeCropper() {
         cropBoxResizable: true,
         toggleDragModeOnDblclick: false,
         background: true,
-        modal: true
+        modal: false,
+        scalable: true,
+        zoomable: true,
+        rotatable: true,
+        checkOrientation: false,
+        dragMode: 'move',
+        minContainerWidth: 300,
+        minContainerHeight: 200
     });
 }
 
-// Rotate image
-function rotateImage(degrees) {
+// Rotate signature
+function rotateSignature(degrees) {
     if (cropper) {
         cropper.rotate(degrees);
+        currentRotation += degrees;
     }
 }
 
-// Reset crop
-function resetCrop() {
+// Reset signature crop
+function resetSignatureCrop() {
     if (cropper) {
         cropper.reset();
+        currentRotation = 0;
     }
 }
 
-// Zoom image
-function zoomImage(ratio) {
-    if (cropper) {
-        cropper.zoom(ratio);
-    }
+
+
+// Close signature editor
+function closeSignatureEditor() {
+    const modal = document.getElementById('signatureEditorModal');
+    modal.classList.remove('active');
+    
+    // Small delay to allow animation to complete
+    setTimeout(() => {
+        // Destroy cropper instance
+        if (cropper) {
+            cropper.destroy();
+            cropper = null;
+        }
+        
+        // Reset file input and hide upload button
+        const signatureInput = document.getElementById('signature');
+        const uploadBtn = document.getElementById('uploadSignatureBtn');
+        
+        if (signatureInput) {
+            signatureInput.value = '';
+        }
+        
+        if (uploadBtn) {
+            uploadBtn.classList.add('hidden');
+        }
+        
+        selectedFile = null;
+        currentRotation = 0;
+    }, 300);
 }
 
-// Close image editor
-function closeImageEditor() {
-    const modal = document.getElementById('imageEditorModal');
-    modal.classList.add('hidden');
-    
-    // Destroy cropper instance
-    if (cropper) {
-        cropper.destroy();
-        cropper = null;
-    }
-    
-    // Reset file input and hide upload button
-    const signatureInput = document.getElementById('signature');
-    const uploadBtn = document.getElementById('uploadSignatureBtn');
-    
-    if (signatureInput) {
-        signatureInput.value = '';
-    }
-    
-    uploadBtn.classList.add('hidden');
-    selectedFile = null;
-}
-
-// Process and upload the edited image
-function processAndUploadImage() {
+// Process and upload the edited signature
+function processAndUploadSignature() {
     if (!cropper) {
         console.error('Cropper not initialized');
         return;
     }
     
-    // Get the cropped canvas with only fixed height - width will adjust automatically
+    // Get the cropped canvas with fixed height - width will adjust automatically
     const FIXED_HEIGHT = 120; // Fixed height for signature
     
     const canvas = cropper.getCroppedCanvas({
@@ -209,7 +222,7 @@ function processAndUploadImage() {
                 // Use background-removed image if successful
                 signatureImageData = finalImage;
                 updateSignaturePreview(finalImage);
-                closeImageEditor();
+                closeSignatureEditor();
                 console.log('Background removed and preview updated');
             })
             .catch(error => {
@@ -217,7 +230,7 @@ function processAndUploadImage() {
                 console.log('Background removal failed, using processed image:', error);
                 signatureImageData = processedImageData;
                 updateSignaturePreview(processedImageData);
-                closeImageEditor();
+                closeSignatureEditor();
             });
     }, 'image/png', 0.9);
 }

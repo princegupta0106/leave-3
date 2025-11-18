@@ -237,185 +237,248 @@ button {
     box-shadow: 0 3px 10px rgba(243, 156, 18, 0.3);
 }
 
-/* Modal styling */
-.modal {
+/* Signature Editor Modal */
+.signature-modal {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.8);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
+    z-index: 10000;
+    display: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
 }
 
-.modal-content {
+.signature-modal.active {
+    display: flex;
+    opacity: 1;
+    visibility: visible;
+}
+
+.signature-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(2px);
+}
+
+.signature-modal-container {
+    position: relative;
+    margin: auto;
     background: white;
     border-radius: 12px;
     width: 90%;
-    max-width: 800px;
+    max-width: 850px;
     max-height: 90vh;
     overflow: hidden;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+    transform: scale(0.9);
+    transition: transform 0.3s ease;
 }
 
-.modal-header {
+.signature-modal.active .signature-modal-container {
+    transform: scale(1);
+}
+
+.signature-modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20px 25px;
+    padding: 20px 24px;
     background: linear-gradient(135deg, #2c3e50, #3498db);
     color: white;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.modal-header h3 {
+.signature-modal-header h3 {
     margin: 0;
-    font-size: 1.3rem;
+    font-size: 1.4rem;
     font-weight: 600;
+    letter-spacing: 0.5px;
 }
 
-.close-btn {
+.signature-close-btn {
     background: none;
     border: none;
     color: white;
-    font-size: 2rem;
     cursor: pointer;
-    padding: 0;
-    width: 30px;
-    height: 30px;
+    padding: 8px;
+    border-radius: 50%;
+    transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
-    transition: background 0.3s ease;
+    width: 36px;
+    height: 36px;
 }
 
-.close-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+.signature-close-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.1);
 }
 
-.modal-body {
-    padding: 25px;
+.signature-close-btn span {
+    font-size: 24px;
+    line-height: 1;
 }
 
-.editor-controls {
+.signature-modal-content {
+    padding: 24px;
+    overflow-y: auto;
+    max-height: calc(90vh - 80px);
+}
+
+.signature-editor-toolbar {
     display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
+    gap: 12px;
+    margin-bottom: 24px;
     justify-content: center;
     flex-wrap: wrap;
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
 }
 
-.editor-btn {
-    background: linear-gradient(135deg, #8e44ad, #9b59b6);
+.toolbar-btn {
+    background: linear-gradient(135deg, #6c5ce7, #a29bfe);
     color: white;
     border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
+    padding: 10px 18px;
+    border-radius: 8px;
     cursor: pointer;
     font-size: 0.9rem;
     font-weight: 500;
-    transition: all 0.3s ease;
-}
-
-.editor-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(142, 68, 173, 0.3);
-}
-
-.image-editor-container {
-    text-align: center;
-    margin: 20px 0;
-    max-height: 400px;
-    overflow: hidden;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    background: #f8f9fa;
-}
-
-#cropImage {
-    max-width: 100%;
-    max-height: 400px;
-    display: block;
-    margin: 0 auto;
-}
-
-.modal-actions {
+    transition: all 0.2s ease;
     display: flex;
-    gap: 15px;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 8px rgba(108, 92, 231, 0.2);
+}
+
+.toolbar-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(108, 92, 231, 0.3);
+}
+
+.toolbar-btn:active {
+    transform: translateY(0);
+}
+
+.signature-editor-workspace {
+    text-align: center;
+    margin: 20px auto;
+    width: 60%;
+    max-width: 400px;
+    height: 250px;
+    border: 2px solid #dee2e6;
+    border-radius: 12px;
+    background: #f8f9fa;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+#signatureEditImage {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.signature-modal-actions {
+    display: flex;
+    gap: 16px;
     justify-content: center;
-    margin-top: 25px;
+    margin-top: 24px;
     padding-top: 20px;
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid #dee2e6;
 }
 
-.cancel-btn {
-    background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+.btn-cancel {
+    background: linear-gradient(135deg, #74b9ff, #0984e3);
     color: white;
     border: none;
-    padding: 10px 25px;
-    border-radius: 6px;
+    padding: 12px 28px;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     font-weight: 600;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(116, 185, 255, 0.3);
 }
 
-.cancel-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(149, 165, 166, 0.3);
+.btn-cancel:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(116, 185, 255, 0.4);
 }
 
-.apply-btn {
-    background: linear-gradient(135deg, #27ae60, #2ecc71);
+.btn-apply {
+    background: linear-gradient(135deg, #00b894, #00cec9);
     color: white;
     border: none;
-    padding: 10px 25px;
-    border-radius: 6px;
+    padding: 12px 28px;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     font-weight: 600;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 184, 148, 0.3);
 }
 
-.apply-btn:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+.btn-apply:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 184, 148, 0.4);
 }
 
-/* Responsive modal */
+/* Responsive Design */
 @media (max-width: 768px) {
-    .modal-content {
+    .signature-modal-container {
         width: 95%;
-        margin: 10px;
+        max-height: 95vh;
     }
     
-    .modal-header {
-        padding: 15px 20px;
+    .signature-modal-header {
+        padding: 16px 20px;
     }
     
-    .modal-body {
+    .signature-modal-header h3 {
+        font-size: 1.2rem;
+    }
+    
+    .signature-modal-content {
         padding: 20px;
     }
     
-    .editor-controls {
+    .signature-editor-toolbar {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .toolbar-btn {
+        width: 100%;
+        max-width: 200px;
         justify-content: center;
     }
     
-    .editor-btn {
-        padding: 6px 12px;
-        font-size: 0.8rem;
+    .signature-editor-workspace {
+        width: 90%;
+        height: 200px;
     }
     
-    .modal-actions {
+    .signature-modal-actions {
         flex-direction: column;
-        gap: 10px;
     }
     
-    .cancel-btn, .apply-btn {
+    .btn-cancel,
+    .btn-apply {
         width: 100%;
+        padding: 14px 20px;
     }
 }
 
