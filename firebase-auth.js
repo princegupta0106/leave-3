@@ -1,4 +1,4 @@
-// Firebase Auth integration (module) with deployment error handling
+// Firebase Auth integration (module)
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
 import {
   getAuth,
@@ -11,11 +11,7 @@ import {
   getFirestore,
   doc,
   setDoc,
-  getDoc,
-  collection,
-  getDocs,
-  updateDoc,
-  increment
+  getDoc
 } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
 // Your Firebase configuration (from user snippet)
@@ -29,16 +25,9 @@ const firebaseConfig = {
   measurementId: "G-NJ2T1JSZDH"
 };
 
-let app, auth, db;
-
-try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-  console.log('Firebase initialized successfully');
-} catch (error) {
-  console.error('Firebase initialization failed:', error);
-}
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
 
 const loginBtn = document.getElementById('firebaseLoginBtn');
 const userNameSpan = document.getElementById('authUserName');
@@ -166,144 +155,10 @@ async function loadUserLeaveData(email) {
   }
 }
 
-// API Key Management System - Simplified approach with error handling
-async function getAllAvailableApiKeys() {
-  try {
-    if (!db) {
-      console.warn('Firestore not initialized');
-      return [];
-    }
-    
-    const apiKeysRef = collection(db, 'pi');
-    const snapshot = await getDocs(apiKeysRef);
-    
-    if (snapshot.empty) {
-      console.warn('No API keys found in database');
-      return [];
-    }
-    
-    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
-    const availableKeys = [];
-    
-    // Load all keys and filter those under limit
-    snapshot.docs.forEach(docSnapshot => {
-      const data = docSnapshot.data();
-      const usageThisMonth = data.usage?.[currentMonth] || 0;
-      
-      console.log(`Processing doc ${docSnapshot.id}:`, {
-        apiKey: data.apiKey,
-        usage: usageThisMonth
-      });
-      
-      if (usageThisMonth < 45 && data.apiKey) {
-        availableKeys.push({
-          id: docSnapshot.id,
-          apiKey: data.apiKey,
-          usageThisMonth: usageThisMonth
-        });
-      }
-    });
-    
-    // Sort by usage (lowest first)
-    availableKeys.sort((a, b) => a.usageThisMonth - b.usageThisMonth);
-    
-    console.log(`Found ${availableKeys.length} available API keys`);
-    return availableKeys;
-  } catch (error) {
-    console.error('Error fetching API keys:', error);
-    return [];
-  }
-}
-
-// Keep the old function for backward compatibility but make it use the new one
-async function getAvailableApiKey() {
-  const keys = await getAllAvailableApiKeys();
-  return keys.length > 0 ? keys[0] : null;
-}
-
-async function incrementApiKeyUsage(keyId) {
-  try {
-    if (!db) {
-      console.warn('Firestore not initialized');
-      return false;
-    }
-    
-    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
-    const keyRef = doc(db, 'pi', keyId);
-    
-    // Increment usage for current month
-    await updateDoc(keyRef, {
-      [`usage.${currentMonth}`]: increment(1),
-      lastUsed: new Date().toISOString()
-    });
-    
-    console.log(`Incremented usage for API key: ${keyId}`);
-    return true;
-  } catch (error) {
-    console.error('Error incrementing API key usage:', error);
-    return false;
-  }
-}
-
-async function markApiKeyExhausted(keyId) {
-  try {
-    if (!db) {
-      console.warn('Firestore not initialized');
-      return false;
-    }
-    
-    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
-    const keyRef = doc(db, 'pi', keyId);
-    
-    // Mark as exhausted (set to 50 to exceed limit)
-    await updateDoc(keyRef, {
-      [`usage.${currentMonth}`]: 50,
-      lastUsed: new Date().toISOString(),
-      exhaustedAt: new Date().toISOString()
-    });
-    
-    console.log(`Marked API key ${keyId} as exhausted (payment required)`);
-    return true;
-  } catch (error) {
-    console.error('Error marking API key as exhausted:', error);
-    return false;
-  }
-}
-
-// Initialize API keys (run this once to set up your API keys)
-async function initializeApiKeys(apiKeysArray) {
-  try {
-    for (let i = 0; i < apiKeysArray.length; i++) {
-      const keyId = `key_${i + 1}`;
-      const keyRef = doc(db, 'pi', keyId);
-      
-      // Check if key already exists
-      const existingDoc = await getDoc(keyRef);
-      if (!existingDoc.exists()) {
-        await setDoc(keyRef, {
-          apiKey: apiKeysArray[i],
-          usage: {}, // Object to store monthly usage: { "2025-11": 5, "2025-12": 0 }
-          createdAt: new Date().toISOString(),
-          lastUsed: null
-        });
-        console.log(`Initialized API key ${keyId}`);
-      }
-    }
-    console.log('API keys initialization complete');
-  } catch (error) {
-    console.error('Error initializing API keys:', error);
-  }
-}
-
 // Expose helper functions to window for use in other scripts
 window.firebaseSaveUserLeaveData = saveUserLeaveData;
 window.firebaseLoadUserLeaveData = loadUserLeaveData;
 window.firebaseGetCurrentUser = () => auth.currentUser || null;
-window.firebaseGetAllAvailableApiKeys = getAllAvailableApiKeys;
-window.firebaseGetAvailableApiKey = getAvailableApiKey;
-window.firebaseIncrementApiKeyUsage = incrementApiKeyUsage;
-window.firebaseMarkApiKeyExhausted = markApiKeyExhausted;
-window.firebaseInitializeApiKeys = initializeApiKeys;
 
 // Note: sign-in with popup requires a secure context (http(s)). If you're testing
 // locally, run a simple HTTP server (e.g. `npx http-server` or `python -m http.server`).

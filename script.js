@@ -257,62 +257,34 @@ function updateSignaturePreview(imageData) {
     }
 }
 
-// Remove background using remove.bg API - Fixed to use actual API keys
+// Remove background using remove.bg API
 async function removeBackground(imageFile) {
     const formData = new FormData();
     formData.append('image_file', imageFile);
     formData.append('size', 'auto');
     
-    // Use your actual API keys directly - no Firebase dependency
-    const apiKeys = [
-        'uEMhzVB2ytTm2gyzVDatCWg7',
-        'udEMhdzVB2ytTm2gyzVDatCW'
-    ];
-    
-    console.log(`Trying ${apiKeys.length} API keys`);
-    
-    // Try each key
-    for (let i = 0; i < apiKeys.length; i++) {
-        const apiKey = apiKeys[i];
+    try {
+        const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+            method: 'POST',
+            headers: {
+                'X-Api-Key': 'uEMhzVB2ytTm2gyzVDatCWg7'
+            },
+            body: formData
+        });
         
-        try {
-            console.log(`Trying API key ${i + 1}: ${apiKey.substring(0, 8)}...`);
-            
-            const response = await fetch('https://api.remove.bg/v1.0/removebg', {
-                method: 'POST',
-                headers: {
-                    'X-Api-Key': apiKey
-                },
-                body: formData
+        if (response.ok) {
+            const blob = await response.blob();
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
             });
-            
-            if (response.ok) {
-                console.log(`✅ Success with API key ${i + 1}`);
-                
-                const blob = await response.blob();
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result);
-                    reader.readAsDataURL(blob);
-                });
-            }
-            else if (response.status === 402) {
-                console.warn(`❌ API key ${i + 1} exhausted (payment required)`);
-                // Continue to next key
-            }
-            else {
-                console.warn(`❌ API key ${i + 1} failed with status ${response.status}`);
-                // Continue to next key
-            }
-            
-        } catch (fetchError) {
-            console.warn(`❌ Network error with API key ${i + 1}:`, fetchError.message);
-            // Continue to next key
+        } else {
+            throw new Error('API request failed');
         }
+    } catch (error) {
+        throw error;
     }
-    
-    // All keys failed
-    throw new Error('All API keys failed or are exhausted');
 }
 
 // Handle form submission
@@ -647,35 +619,3 @@ document.getElementById('resetForm').addEventListener('click', function() {
     
     console.log('Form reset, preview cleared');
 });
-
-// Admin function to initialize API keys (call this once in browser console)
-window.initRemoveBgApiKeys = async function(apiKeys) {
-    if (!Array.isArray(apiKeys) || apiKeys.length === 0) {
-        console.error('Please provide an array of API keys');
-        return;
-    }
-    
-    try {
-        await window.firebaseInitializeApiKeys(apiKeys);
-        console.log('✅ API keys initialized successfully!');
-        console.log('Keys added:', apiKeys.length);
-    } catch (error) {
-        console.error('❌ Failed to initialize API keys:', error);
-    }
-};
-
-// Admin function to check API key status
-window.checkApiKeyStatus = async function() {
-    try {
-        const keyInfo = await window.firebaseGetAvailableApiKey();
-        if (keyInfo) {
-            console.log('✅ Available API key found:');
-            console.log(`Key ID: ${keyInfo.id}`);
-            console.log(`Usage this month: ${keyInfo.usageThisMonth}/45`);
-        } else {
-            console.log('❌ No available API keys (all at limit)');
-        }
-    } catch (error) {
-        console.error('Error checking API key status:', error);
-    }
-};
