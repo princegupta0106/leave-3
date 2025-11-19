@@ -1,1 +1,11 @@
-d
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://leavebc.vercel.app/sitemap.xml
+
+# Crawl-delay (optional)
+Crawl-delay: 1
+
+# Allow all search engines to crawl the site
+# This is a public educational tool for BITS Pilani students
