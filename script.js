@@ -257,9 +257,15 @@ function updateSignaturePreview(imageData) {
     }
 }
 
-// Remove background using remove.bg API - Simplified and robust
+// Remove background using remove.bg API - Simplified and robust with better error handling
 async function removeBackground(imageFile) {
     try {
+        // Check if Firebase functions are available (deployment safety)
+        if (!window.firebaseGetAllAvailableApiKeys) {
+            console.warn('Firebase API key management not available, using fallback');
+            throw new Error('API key management system not loaded');
+        }
+
         // Get ALL available API keys (usage < 45) upfront
         const availableKeys = await window.firebaseGetAllAvailableApiKeys();
         
@@ -292,7 +298,9 @@ async function removeBackground(imageFile) {
                 
                 if (response.ok) {
                     // Success! Increment usage
-                    await window.firebaseIncrementApiKeyUsage(keyInfo.id);
+                    if (window.firebaseIncrementApiKeyUsage) {
+                        await window.firebaseIncrementApiKeyUsage(keyInfo.id);
+                    }
                     console.log(`✅ Success with key ${keyInfo.id}`);
                     
                     const blob = await response.blob();
@@ -305,7 +313,9 @@ async function removeBackground(imageFile) {
                 else if (response.status === 402) {
                     // Payment required - mark as exhausted
                     console.warn(`💳 Key ${keyInfo.id} limit reached, marking as exhausted`);
-                    await window.firebaseMarkApiKeyExhausted(keyInfo.id);
+                    if (window.firebaseMarkApiKeyExhausted) {
+                        await window.firebaseMarkApiKeyExhausted(keyInfo.id);
+                    }
                     // Continue to next key
                 } 
                 else {

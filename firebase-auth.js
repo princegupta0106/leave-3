@@ -1,4 +1,4 @@
-// Firebase Auth integration (module)
+// Firebase Auth integration (module) with deployment error handling
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
 import {
   getAuth,
@@ -29,9 +29,16 @@ const firebaseConfig = {
   measurementId: "G-NJ2T1JSZDH"
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+let app, auth, db;
+
+try {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  console.log('Firebase initialized successfully');
+} catch (error) {
+  console.error('Firebase initialization failed:', error);
+}
 
 const loginBtn = document.getElementById('firebaseLoginBtn');
 const userNameSpan = document.getElementById('authUserName');
@@ -159,9 +166,14 @@ async function loadUserLeaveData(email) {
   }
 }
 
-// API Key Management System - Simplified approach
+// API Key Management System - Simplified approach with error handling
 async function getAllAvailableApiKeys() {
   try {
+    if (!db) {
+      console.warn('Firestore not initialized');
+      return [];
+    }
+    
     const apiKeysRef = collection(db, 'pi');
     const snapshot = await getDocs(apiKeysRef);
     
@@ -206,6 +218,11 @@ async function getAvailableApiKey() {
 
 async function incrementApiKeyUsage(keyId) {
   try {
+    if (!db) {
+      console.warn('Firestore not initialized');
+      return false;
+    }
+    
     const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
     const keyRef = doc(db, 'pi', keyId);
     
@@ -225,6 +242,11 @@ async function incrementApiKeyUsage(keyId) {
 
 async function markApiKeyExhausted(keyId) {
   try {
+    if (!db) {
+      console.warn('Firestore not initialized');
+      return false;
+    }
+    
     const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
     const keyRef = doc(db, 'pi', keyId);
     
