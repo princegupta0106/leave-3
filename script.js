@@ -257,61 +257,37 @@ function updateSignaturePreview(imageData) {
     }
 }
 
-// Remove background using remove.bg API - Back to simple working approach
+// Remove background using remove.bg API - Fixed to use actual API keys
 async function removeBackground(imageFile) {
     const formData = new FormData();
     formData.append('image_file', imageFile);
     formData.append('size', 'auto');
     
-    // Try to get API keys from Firebase, fallback to hardcoded if needed
-    let availableKeys = [];
+    // Use your actual API keys directly - no Firebase dependency
+    const apiKeys = [
+        'uEMhzVB2ytTm2gyzVDatCWg7',
+        'udEMhdzVB2ytTm2gyzVDatCW'
+    ];
     
-    try {
-        if (window.firebaseGetAllAvailableApiKeys) {
-            availableKeys = await window.firebaseGetAllAvailableApiKeys();
-            console.log('API keys from Firebase:', availableKeys);
-        }
-    } catch (error) {
-        console.warn('Firebase API key fetch failed:', error);
-    }
-    
-    // If no keys from Firebase, use hardcoded as fallback
-    if (!availableKeys || availableKeys.length === 0) {
-        console.log('Using fallback API keys');
-        availableKeys = [
-            { id: 'fallback_1', apiKey: 'uEMhzVB2ytTm2gyzVDatCWg7', usageThisMonth: 0 },
-            { id: 'fallback_2', apiKey: 'udEMhdzVB2ytTm2gyzVDatCW', usageThisMonth: 0 }
-        ];
-    }
-    
-    console.log(`Found ${availableKeys.length} API keys to try`);
+    console.log(`Trying ${apiKeys.length} API keys`);
     
     // Try each key
-    for (let i = 0; i < availableKeys.length; i++) {
-        const keyInfo = availableKeys[i];
+    for (let i = 0; i < apiKeys.length; i++) {
+        const apiKey = apiKeys[i];
         
         try {
-            console.log(`Trying key ${keyInfo.id} with API key: ${keyInfo.apiKey.substring(0, 8)}...`);
+            console.log(`Trying API key ${i + 1}: ${apiKey.substring(0, 8)}...`);
             
             const response = await fetch('https://api.remove.bg/v1.0/removebg', {
                 method: 'POST',
                 headers: {
-                    'X-Api-Key': keyInfo.apiKey
+                    'X-Api-Key': apiKey
                 },
                 body: formData
             });
             
             if (response.ok) {
-                console.log(`✅ Success with key ${keyInfo.id}`);
-                
-                // Try to increment usage if Firebase is available
-                try {
-                    if (window.firebaseIncrementApiKeyUsage && !keyInfo.id.startsWith('fallback_')) {
-                        await window.firebaseIncrementApiKeyUsage(keyInfo.id);
-                    }
-                } catch (e) {
-                    console.warn('Failed to increment usage:', e);
-                }
+                console.log(`✅ Success with API key ${i + 1}`);
                 
                 const blob = await response.blob();
                 return new Promise((resolve) => {
@@ -321,23 +297,17 @@ async function removeBackground(imageFile) {
                 });
             }
             else if (response.status === 402) {
-                console.warn(`❌ Key ${keyInfo.id} exhausted (payment required)`);
-                
-                // Try to mark as exhausted if Firebase is available
-                try {
-                    if (window.firebaseMarkApiKeyExhausted && !keyInfo.id.startsWith('fallback_')) {
-                        await window.firebaseMarkApiKeyExhausted(keyInfo.id);
-                    }
-                } catch (e) {
-                    console.warn('Failed to mark as exhausted:', e);
-                }
+                console.warn(`❌ API key ${i + 1} exhausted (payment required)`);
+                // Continue to next key
             }
             else {
-                console.warn(`❌ Key ${keyInfo.id} failed with status ${response.status}`);
+                console.warn(`❌ API key ${i + 1} failed with status ${response.status}`);
+                // Continue to next key
             }
             
         } catch (fetchError) {
-            console.warn(`❌ Network error with key ${keyInfo.id}:`, fetchError.message);
+            console.warn(`❌ Network error with API key ${i + 1}:`, fetchError.message);
+            // Continue to next key
         }
     }
     
