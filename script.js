@@ -217,12 +217,17 @@ function processAndUploadSignature() {
     canvas.toBlob(function(blob) {
         const processedFile = new File([blob], selectedFile.name, { type: 'image/png' });
         
+        // Show processing message
+        showProcessingMessage('Removing background...');
+        
         removeBackground(processedFile)
             .then(finalImage => {
                 // Use background-removed image if successful
                 signatureImageData = finalImage;
                 updateSignaturePreview(finalImage);
                 closeSignatureEditor();
+                hideProcessingMessage();
+                showTemporaryMessage('✅ Background removed successfully!', 'success');
                 console.log('Background removed and preview updated');
             })
             .catch(error => {
@@ -231,6 +236,18 @@ function processAndUploadSignature() {
                 signatureImageData = processedImageData;
                 updateSignaturePreview(processedImageData);
                 closeSignatureEditor();
+                hideProcessingMessage();
+                
+                // Show appropriate message based on error
+                const isLocalhost = window.location.hostname === 'localhost' || 
+                                   window.location.hostname === '127.0.0.1' || 
+                                   window.location.hostname === '';
+                
+                if (isLocalhost && error.message.includes('CORS')) {
+                    showTemporaryMessage('🚧 Background removal disabled in local development. Will work when deployed!', 'info');
+                } else {
+                    showTemporaryMessage('⚠️ Using original image (background removal unavailable)', 'warning');
+                }
             });
     }, 'image/png', 0.9);
 }
@@ -257,61 +274,61 @@ function updateSignaturePreview(imageData) {
     }
 }
 
-// Remove background using remove.bg API - Back to simple working approach
+// Remove background using remove.bg API with Firebase key rotation
 async function removeBackground(imageFile) {
-    const formData = new FormData();
-    formData.append('image_file', imageFile);
-    formData.append('size', 'auto');
+    console.log('Starting background removal process...');
     
-    // Try to get API keys from Firebase, fallback to hardcoded if needed
-    let availableKeys = [];
+    // Get all available API keys from Firebase
+    const availableKeys = await window.firebaseGetAllAvailableApiKeys();
     
-    try {
-        if (window.firebaseGetAllAvailableApiKeys) {
-            availableKeys = await window.firebaseGetAllAvailableApiKeys();
-            console.log('API keys from Firebase:', availableKeys);
-        }
-    } catch (error) {
-        console.warn('Firebase API key fetch failed:', error);
-    }
-    
-    // If no keys from Firebase, use hardcoded as fallback
     if (!availableKeys || availableKeys.length === 0) {
-        console.log('Using fallback API keys');
-        availableKeys = [
-            { id: 'fallback_1', apiKey: 'uEMhzVB2ytTm2gyzVDatCWg7', usageThisMonth: 0 },
-            { id: 'fallback_2', apiKey: 'udEMhdzVB2ytTm2gyzVDatCW', usageThisMonth: 0 }
-        ];
+        console.log('No available API keys found, using fallback');
+        throw new Error('No API keys available');
     }
     
-    console.log(`Found ${availableKeys.length} API keys to try`);
+    console.log(`Found ${availableKeys.length} available API keys to try`);
     
-    // Try each key
+    // Check if we're running locally and need CORS proxy
+    const isLocalhost = window.location.hostname === 'localhost' || 
+                       window.location.hostname === '127.0.0.1' || 
+                       window.location.hostname === '';
+    
+    const baseUrl = isLocalhost 
+        ? 'https://cors-anywhere.herokuapp.com/https://api.remove.bg/v1/removebg'
+        : 'https://api.remove.bg/v1/removebg';
+    
+    if (isLocalhost) {
+        console.log('Local development detected, using CORS proxy');
+    }
+    
+    // Try each available API key until one works
     for (let i = 0; i < availableKeys.length; i++) {
         const keyInfo = availableKeys[i];
+        console.log(`Trying key ${i + 1}/${availableKeys.length} (usage: ${keyInfo.usageThisMonth}/50)`);
         
         try {
-            console.log(`Trying key ${keyInfo.id} with API key: ${keyInfo.apiKey.substring(0, 8)}...`);
+            const formData = new FormData();
+            formData.append('image_file', imageFile);
+            formData.append('size', 'auto');
             
-            const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+            const headers = {
+                'X-Api-Key': keyInfo.apiKey
+            };
+            
+            // Add CORS proxy headers if needed
+            if (isLocalhost) {
+                headers['X-Requested-With'] = 'XMLHttpRequest';
+            }
+            
+            const response = await fetch(baseUrl, {
                 method: 'POST',
-                headers: {
-                    'X-Api-Key': keyInfo.apiKey
-                },
+                headers: headers,
                 body: formData
             });
             
             if (response.ok) {
-                console.log(`✅ Success with key ${keyInfo.id}`);
-                
-                // Try to increment usage if Firebase is available
-                try {
-                    if (window.firebaseIncrementApiKeyUsage && !keyInfo.id.startsWith('fallback_')) {
-                        await window.firebaseIncrementApiKeyUsage(keyInfo.id);
-                    }
-                } catch (e) {
-                    console.warn('Failed to increment usage:', e);
-                }
+                // Success! Increment usage counter
+                await window.firebaseIncrementApiKeyUsage(keyInfo.id);
                 
                 const blob = await response.blob();
                 return new Promise((resolve) => {
@@ -319,30 +336,41 @@ async function removeBackground(imageFile) {
                     reader.onload = () => resolve(reader.result);
                     reader.readAsDataURL(blob);
                 });
-            }
-            else if (response.status === 402) {
-                console.warn(`❌ Key ${keyInfo.id} exhausted (payment required)`);
+            } else if (response.status === 400) {
+                const errorText = await response.text();
+                console.log(`Key ${keyInfo.id} failed with status 400:`, errorText);
                 
-                // Try to mark as exhausted if Firebase is available
-                try {
-                    if (window.firebaseMarkApiKeyExhausted && !keyInfo.id.startsWith('fallback_')) {
-                        await window.firebaseMarkApiKeyExhausted(keyInfo.id);
-                    }
-                } catch (e) {
-                    console.warn('Failed to mark as exhausted:', e);
+                // If this is a usage limit error, mark key as exhausted
+                if (errorText.includes('Insufficient credits') || errorText.includes('exceeded')) {
+                    console.log(`Marking key ${keyInfo.id} as exhausted`);
+                    await window.firebaseMarkApiKeyExhausted(keyInfo.id);
                 }
+                
+                // Try next key
+                continue;
+            } else {
+                console.log(`Key ${keyInfo.id} failed with status ${response.status}`);
+                continue;
             }
-            else {
-                console.warn(`❌ Key ${keyInfo.id} failed with status ${response.status}`);
+        } catch (error) {
+            console.log(`Key ${keyInfo.id} failed with network error:`, error.message);
+            
+            // If it's a CORS error on localhost, suggest deployment
+            if (isLocalhost && error.message.includes('CORS')) {
+                console.log('CORS error detected - this will work when deployed to a real domain');
             }
             
-        } catch (fetchError) {
-            console.warn(`❌ Network error with key ${keyInfo.id}:`, fetchError.message);
+            continue;
         }
     }
     
     // All keys failed
-    throw new Error('All API keys failed or are exhausted');
+    const errorMessage = isLocalhost 
+        ? 'Background removal is not available in local development due to CORS restrictions. This feature will work when deployed to a real domain.'
+        : 'All API keys exhausted or failed';
+    
+    console.log(errorMessage);
+    throw new Error(errorMessage);
 }
 
 // Handle form submission
@@ -643,6 +671,72 @@ function showSuccessMessage(fileName) {
     }, 3000);
 }
 
+// Show processing message
+let processingMessageElement = null;
+function showProcessingMessage(text) {
+    hideProcessingMessage(); // Remove any existing message
+    
+    processingMessageElement = document.createElement('div');
+    processingMessageElement.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #3498db;
+        color: white;
+        padding: 15px 25px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        text-align: center;
+        z-index: 1001;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+    `;
+    processingMessageElement.textContent = text;
+    
+    document.body.appendChild(processingMessageElement);
+}
+
+function hideProcessingMessage() {
+    if (processingMessageElement) {
+        processingMessageElement.remove();
+        processingMessageElement = null;
+    }
+}
+
+// Show temporary message (success, warning, error)
+function showTemporaryMessage(text, type = 'info') {
+    const colors = {
+        success: '#27ae60',
+        warning: '#f39c12', 
+        error: '#e74c3c',
+        info: '#3498db'
+    };
+    
+    const message = document.createElement('div');
+    message.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${colors[type]};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        z-index: 1002;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        max-width: 350px;
+    `;
+    message.textContent = text;
+    
+    document.body.appendChild(message);
+    
+    setTimeout(() => {
+        message.remove();
+    }, 4000);
+}
+
 // Reset form handler
 document.getElementById('resetForm').addEventListener('click', function() {
     signatureImageData = null;
@@ -677,35 +771,3 @@ document.getElementById('resetForm').addEventListener('click', function() {
     
     console.log('Form reset, preview cleared');
 });
-
-// Admin function to initialize API keys (call this once in browser console)
-window.initRemoveBgApiKeys = async function(apiKeys) {
-    if (!Array.isArray(apiKeys) || apiKeys.length === 0) {
-        console.error('Please provide an array of API keys');
-        return;
-    }
-    
-    try {
-        await window.firebaseInitializeApiKeys(apiKeys);
-        console.log('✅ API keys initialized successfully!');
-        console.log('Keys added:', apiKeys.length);
-    } catch (error) {
-        console.error('❌ Failed to initialize API keys:', error);
-    }
-};
-
-// Admin function to check API key status
-window.checkApiKeyStatus = async function() {
-    try {
-        const keyInfo = await window.firebaseGetAvailableApiKey();
-        if (keyInfo) {
-            console.log('✅ Available API key found:');
-            console.log(`Key ID: ${keyInfo.id}`);
-            console.log(`Usage this month: ${keyInfo.usageThisMonth}/45`);
-        } else {
-            console.log('❌ No available API keys (all at limit)');
-        }
-    } catch (error) {
-        console.error('Error checking API key status:', error);
-    }
-};
