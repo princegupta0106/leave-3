@@ -274,7 +274,7 @@ function updateSignaturePreview(imageData) {
     }
 }
 
-// Remove background using remove.bg API with Firebase key rotation
+// Remove background using serverless function proxy with Firebase key rotation
 async function removeBackground(imageFile) {
     console.log('Starting background removal process...');
     
@@ -288,18 +288,12 @@ async function removeBackground(imageFile) {
     
     console.log(`Found ${availableKeys.length} available API keys to try`);
     
-    // Check if we're running locally and need CORS proxy
-    const isLocalhost = window.location.hostname === 'localhost' || 
-                       window.location.hostname === '127.0.0.1' || 
-                       window.location.hostname === '';
-    
-    const baseUrl = isLocalhost 
-        ? 'https://cors-anywhere.herokuapp.com/https://api.remove.bg/v1/removebg'
-        : 'https://api.remove.bg/v1/removebg';
-    
-    if (isLocalhost) {
-        console.log('Local development detected, using CORS proxy');
-    }
+    // Convert image file to base64
+    const imageBase64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(imageFile);
+    });
     
     // Try each available API key until one works
     for (let i = 0; i < availableKeys.length; i++) {
@@ -307,41 +301,30 @@ async function removeBackground(imageFile) {
         console.log(`Trying key ${i + 1}/${availableKeys.length} (usage: ${keyInfo.usageThisMonth}/50)`);
         
         try {
-            const formData = new FormData();
-            formData.append('image_file', imageFile);
-            formData.append('size', 'auto');
-            
-            const headers = {
-                'X-Api-Key': keyInfo.apiKey
-            };
-            
-            // Add CORS proxy headers if needed
-            if (isLocalhost) {
-                headers['X-Requested-With'] = 'XMLHttpRequest';
-            }
-            
-            const response = await fetch(baseUrl, {
+            // Call our serverless function instead of Remove.bg directly
+            const response = await fetch('/api/remove-bg', {
                 method: 'POST',
-                headers: headers,
-                body: formData
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    imageBase64: imageBase64,
+                    apiKey: keyInfo.apiKey
+                })
             });
             
-            if (response.ok) {
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
                 // Success! Increment usage counter
                 await window.firebaseIncrementApiKeyUsage(keyInfo.id);
-                
-                const blob = await response.blob();
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result);
-                    reader.readAsDataURL(blob);
-                });
-            } else if (response.status === 400) {
-                const errorText = await response.text();
-                console.log(`Key ${keyInfo.id} failed with status 400:`, errorText);
+                console.log(`Successfully processed with key ${keyInfo.id}`);
+                return result.image;
+            } else if (response.status === 400 || (result.status && result.status === 400)) {
+                console.log(`Key ${keyInfo.id} failed with status 400:`, result.details);
                 
                 // If this is a usage limit error, mark key as exhausted
-                if (errorText.includes('Insufficient credits') || errorText.includes('exceeded')) {
+                if (result.details && (result.details.includes('Insufficient credits') || result.details.includes('exceeded'))) {
                     console.log(`Marking key ${keyInfo.id} as exhausted`);
                     await window.firebaseMarkApiKeyExhausted(keyInfo.id);
                 }
@@ -349,28 +332,18 @@ async function removeBackground(imageFile) {
                 // Try next key
                 continue;
             } else {
-                console.log(`Key ${keyInfo.id} failed with status ${response.status}`);
+                console.log(`Key ${keyInfo.id} failed with status ${response.status}:`, result.error);
                 continue;
             }
         } catch (error) {
             console.log(`Key ${keyInfo.id} failed with network error:`, error.message);
-            
-            // If it's a CORS error on localhost, suggest deployment
-            if (isLocalhost && error.message.includes('CORS')) {
-                console.log('CORS error detected - this will work when deployed to a real domain');
-            }
-            
             continue;
         }
     }
     
     // All keys failed
-    const errorMessage = isLocalhost 
-        ? 'Background removal is not available in local development due to CORS restrictions. This feature will work when deployed to a real domain.'
-        : 'All API keys exhausted or failed';
-    
-    console.log(errorMessage);
-    throw new Error(errorMessage);
+    console.log('All API keys exhausted or failed');
+    throw new Error('All API keys exhausted or failed');
 }
 
 // Handle form submission

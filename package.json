@@ -1,0 +1,14 @@
+{
+  "name": "leave-consent-form",
+  "version": "1.0.0",
+  "description": "Parent's Consent Form Generator with Background Removal",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'No build step required'",
+    "start": "vercel dev"
+  },
+  "dependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
+}
