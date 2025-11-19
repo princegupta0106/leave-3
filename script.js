@@ -217,17 +217,12 @@ function processAndUploadSignature() {
     canvas.toBlob(function(blob) {
         const processedFile = new File([blob], selectedFile.name, { type: 'image/png' });
         
-        // Show processing message
-        showProcessingMessage('Removing background...');
-        
         removeBackground(processedFile)
             .then(finalImage => {
                 // Use background-removed image if successful
                 signatureImageData = finalImage;
                 updateSignaturePreview(finalImage);
                 closeSignatureEditor();
-                hideProcessingMessage();
-                showTemporaryMessage('✅ Background removed successfully!', 'success');
                 console.log('Background removed and preview updated');
             })
             .catch(error => {
@@ -236,18 +231,6 @@ function processAndUploadSignature() {
                 signatureImageData = processedImageData;
                 updateSignaturePreview(processedImageData);
                 closeSignatureEditor();
-                hideProcessingMessage();
-                
-                // Show appropriate message based on error
-                const isLocalhost = window.location.hostname === 'localhost' || 
-                                   window.location.hostname === '127.0.0.1' || 
-                                   window.location.hostname === '';
-                
-                if (isLocalhost && error.message.includes('CORS')) {
-                    showTemporaryMessage('🚧 Background removal disabled in local development. Will work when deployed!', 'info');
-                } else {
-                    showTemporaryMessage('⚠️ Using original image (background removal unavailable)', 'warning');
-                }
             });
     }, 'image/png', 0.9);
 }
@@ -274,76 +257,34 @@ function updateSignaturePreview(imageData) {
     }
 }
 
-// Remove background using serverless function proxy with Firebase key rotation
+// Remove background using remove.bg API
 async function removeBackground(imageFile) {
-    console.log('Starting background removal process...');
+    const formData = new FormData();
+    formData.append('image_file', imageFile);
+    formData.append('size', 'auto');
     
-    // Get all available API keys from Firebase
-    const availableKeys = await window.firebaseGetAllAvailableApiKeys();
-    
-    if (!availableKeys || availableKeys.length === 0) {
-        console.log('No available API keys found, using fallback');
-        throw new Error('No API keys available');
-    }
-    
-    console.log(`Found ${availableKeys.length} available API keys to try`);
-    
-    // Convert image file to base64
-    const imageBase64 = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.readAsDataURL(imageFile);
-    });
-    
-    // Try each available API key until one works
-    for (let i = 0; i < availableKeys.length; i++) {
-        const keyInfo = availableKeys[i];
-        console.log(`Trying key ${i + 1}/${availableKeys.length} (usage: ${keyInfo.usageThisMonth}/50)`);
+    try {
+        const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+            method: 'POST',
+            headers: {
+                'X-Api-Key': 'uEMhzVB2ytTm2gyzVDatCWg7'
+            },
+            body: formData
+        });
         
-        try {
-            // Call our serverless function instead of Remove.bg directly
-            const response = await fetch('/api/remove-bg', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    imageBase64: imageBase64,
-                    apiKey: keyInfo.apiKey
-                })
+        if (response.ok) {
+            const blob = await response.blob();
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.readAsDataURL(blob);
             });
-            
-            const result = await response.json();
-            
-            if (response.ok && result.success) {
-                // Success! Increment usage counter
-                await window.firebaseIncrementApiKeyUsage(keyInfo.id);
-                console.log(`Successfully processed with key ${keyInfo.id}`);
-                return result.image;
-            } else if (response.status === 400 || (result.status && result.status === 400)) {
-                console.log(`Key ${keyInfo.id} failed with status 400:`, result.details);
-                
-                // If this is a usage limit error, mark key as exhausted
-                if (result.details && (result.details.includes('Insufficient credits') || result.details.includes('exceeded'))) {
-                    console.log(`Marking key ${keyInfo.id} as exhausted`);
-                    await window.firebaseMarkApiKeyExhausted(keyInfo.id);
-                }
-                
-                // Try next key
-                continue;
-            } else {
-                console.log(`Key ${keyInfo.id} failed with status ${response.status}:`, result.error);
-                continue;
-            }
-        } catch (error) {
-            console.log(`Key ${keyInfo.id} failed with network error:`, error.message);
-            continue;
+        } else {
+            throw new Error('API request failed');
         }
+    } catch (error) {
+        throw error;
     }
-    
-    // All keys failed
-    console.log('All API keys exhausted or failed');
-    throw new Error('All API keys exhausted or failed');
 }
 
 // Handle form submission
@@ -642,72 +583,6 @@ function showSuccessMessage(fileName) {
     setTimeout(() => {
         message.remove();
     }, 3000);
-}
-
-// Show processing message
-let processingMessageElement = null;
-function showProcessingMessage(text) {
-    hideProcessingMessage(); // Remove any existing message
-    
-    processingMessageElement = document.createElement('div');
-    processingMessageElement.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: #3498db;
-        color: white;
-        padding: 15px 25px;
-        border-radius: 8px;
-        font-size: 14px;
-        font-weight: 500;
-        text-align: center;
-        z-index: 1001;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.2);
-    `;
-    processingMessageElement.textContent = text;
-    
-    document.body.appendChild(processingMessageElement);
-}
-
-function hideProcessingMessage() {
-    if (processingMessageElement) {
-        processingMessageElement.remove();
-        processingMessageElement = null;
-    }
-}
-
-// Show temporary message (success, warning, error)
-function showTemporaryMessage(text, type = 'info') {
-    const colors = {
-        success: '#27ae60',
-        warning: '#f39c12', 
-        error: '#e74c3c',
-        info: '#3498db'
-    };
-    
-    const message = document.createElement('div');
-    message.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: ${colors[type]};
-        color: white;
-        padding: 12px 20px;
-        border-radius: 6px;
-        font-size: 14px;
-        font-weight: 500;
-        z-index: 1002;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        max-width: 350px;
-    `;
-    message.textContent = text;
-    
-    document.body.appendChild(message);
-    
-    setTimeout(() => {
-        message.remove();
-    }, 4000);
 }
 
 // Reset form handler
