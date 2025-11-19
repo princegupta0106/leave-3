@@ -214,6 +214,26 @@ async function incrementApiKeyUsage(keyId) {
   }
 }
 
+async function markApiKeyExhausted(keyId) {
+  try {
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+    const keyRef = doc(db, 'pi', keyId);
+    
+    // Mark as exhausted (set to 50 to exceed limit)
+    await updateDoc(keyRef, {
+      [`usage.${currentMonth}`]: 50,
+      lastUsed: new Date().toISOString(),
+      exhaustedAt: new Date().toISOString()
+    });
+    
+    console.log(`Marked API key ${keyId} as exhausted (payment required)`);
+    return true;
+  } catch (error) {
+    console.error('Error marking API key as exhausted:', error);
+    return false;
+  }
+}
+
 // Initialize API keys (run this once to set up your API keys)
 async function initializeApiKeys(apiKeysArray) {
   try {
@@ -245,6 +265,7 @@ window.firebaseLoadUserLeaveData = loadUserLeaveData;
 window.firebaseGetCurrentUser = () => auth.currentUser || null;
 window.firebaseGetAvailableApiKey = getAvailableApiKey;
 window.firebaseIncrementApiKeyUsage = incrementApiKeyUsage;
+window.firebaseMarkApiKeyExhausted = markApiKeyExhausted;
 window.firebaseInitializeApiKeys = initializeApiKeys;
 
 // Note: sign-in with popup requires a secure context (http(s)). If you're testing

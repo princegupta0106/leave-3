@@ -257,46 +257,71 @@ function updateSignaturePreview(imageData) {
     }
 }
 
-// Remove background using remove.bg API with Firebase key management
+// Remove background using remove.bg API with Firebase key management and auto-retry
 async function removeBackground(imageFile) {
     const formData = new FormData();
     formData.append('image_file', imageFile);
     formData.append('size', 'auto');
     
-    try {
-        // Get available API key from Firebase
-        const apiKeyInfo = await window.firebaseGetAvailableApiKey();
-        
-        if (!apiKeyInfo) {
-            throw new Error('No available API keys - all have reached monthly limit');
-        }
-        
-        console.log('Using API key for background removal:', apiKeyInfo.id);
-        
-        const response = await fetch('https://api.remove.bg/v1.0/removebg', {
-            method: 'POST',
-            headers: {
-                'X-Api-Key': apiKeyInfo.apiKey
-            },
-            body: formData
-        });
-        
-        if (response.ok) {
-            // Increment usage count for this API key
-            await window.firebaseIncrementApiKeyUsage(apiKeyInfo.id);
+    // Maximum retry attempts
+    const maxRetries = 5;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            // Get available API key from Firebase
+            const apiKeyInfo = await window.firebaseGetAvailableApiKey();
             
-            const blob = await response.blob();
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.readAsDataURL(blob);
+            if (!apiKeyInfo) {
+                throw new Error('No available API keys - all have reached monthly limit');
+            }
+            
+            console.log(`Attempt ${attempt}: Using API key ${apiKeyInfo.id} (usage: ${apiKeyInfo.usageThisMonth}/45)`);
+            
+            const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+                method: 'POST',
+                headers: {
+                    'X-Api-Key': apiKeyInfo.apiKey
+                },
+                body: formData
             });
-        } else {
-            throw new Error(`API request failed with status: ${response.status}`);
+            
+            if (response.ok) {
+                // Success! Increment usage count for this API key
+                await window.firebaseIncrementApiKeyUsage(apiKeyInfo.id);
+                console.log(`✅ Background removal successful with key ${apiKeyInfo.id}`);
+                
+                const blob = await response.blob();
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.readAsDataURL(blob);
+                });
+            } else if (response.status === 402) {
+                // Payment required - mark this key as exhausted and try next
+                console.warn(`💳 Payment required for key ${apiKeyInfo.id}, marking as exhausted`);
+                await window.firebaseMarkApiKeyExhausted(apiKeyInfo.id);
+                
+                if (attempt < maxRetries) {
+                    console.log(`🔄 Retrying with next available API key...`);
+                    continue; // Try next available key
+                } else {
+                    throw new Error('All API keys exhausted - payment required');
+                }
+            } else {
+                throw new Error(`API request failed with status: ${response.status}`);
+            }
+        } catch (error) {
+            console.error(`Attempt ${attempt} failed:`, error);
+            
+            if (attempt === maxRetries) {
+                throw error; // Re-throw on final attempt
+            }
+            
+            // For non-payment errors, wait a bit before retry
+            if (!error.message.includes('payment')) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
         }
-    } catch (error) {
-        console.error('Background removal error:', error);
-        throw error;
     }
 }
 
