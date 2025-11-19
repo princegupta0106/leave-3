@@ -257,85 +257,92 @@ function updateSignaturePreview(imageData) {
     }
 }
 
-// Remove background using remove.bg API - Simplified and robust with better error handling
+// Remove background using remove.bg API - Back to simple working approach
 async function removeBackground(imageFile) {
+    const formData = new FormData();
+    formData.append('image_file', imageFile);
+    formData.append('size', 'auto');
+    
+    // Try to get API keys from Firebase, fallback to hardcoded if needed
+    let availableKeys = [];
+    
     try {
-        // Check if Firebase functions are available (deployment safety)
-        if (!window.firebaseGetAllAvailableApiKeys) {
-            console.warn('Firebase API key management not available, using fallback');
-            throw new Error('API key management system not loaded');
+        if (window.firebaseGetAllAvailableApiKeys) {
+            availableKeys = await window.firebaseGetAllAvailableApiKeys();
+            console.log('API keys from Firebase:', availableKeys);
         }
-
-        // Get ALL available API keys (usage < 45) upfront
-        const availableKeys = await window.firebaseGetAllAvailableApiKeys();
+    } catch (error) {
+        console.warn('Firebase API key fetch failed:', error);
+    }
+    
+    // If no keys from Firebase, use hardcoded as fallback
+    if (!availableKeys || availableKeys.length === 0) {
+        console.log('Using fallback API keys');
+        availableKeys = [
+            { id: 'fallback_1', apiKey: 'uEMhzVB2ytTm2gyzVDatCWg7', usageThisMonth: 0 },
+            { id: 'fallback_2', apiKey: 'udEMhdzVB2ytTm2gyzVDatCW', usageThisMonth: 0 }
+        ];
+    }
+    
+    console.log(`Found ${availableKeys.length} API keys to try`);
+    
+    // Try each key
+    for (let i = 0; i < availableKeys.length; i++) {
+        const keyInfo = availableKeys[i];
         
-        if (!availableKeys || availableKeys.length === 0) {
-            throw new Error('No available API keys - all have reached monthly limit (45 uses)');
-        }
-        
-        console.log(`Found ${availableKeys.length} available API keys`);
-        
-        const formData = new FormData();
-        formData.append('image_file', imageFile);
-        formData.append('size', 'auto');
-        
-        // Try maximum 2 keys
-        const maxTries = Math.min(2, availableKeys.length);
-        
-        for (let i = 0; i < maxTries; i++) {
-            const keyInfo = availableKeys[i];
+        try {
+            console.log(`Trying key ${keyInfo.id} with API key: ${keyInfo.apiKey.substring(0, 8)}...`);
             
-            try {
-                console.log(`Trying API key ${keyInfo.id} (usage: ${keyInfo.usageThisMonth}/45)`);
+            const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+                method: 'POST',
+                headers: {
+                    'X-Api-Key': keyInfo.apiKey
+                },
+                body: formData
+            });
+            
+            if (response.ok) {
+                console.log(`✅ Success with key ${keyInfo.id}`);
                 
-                const response = await fetch('https://api.remove.bg/v1.0/removebg', {
-                    method: 'POST',
-                    headers: {
-                        'X-Api-Key': keyInfo.apiKey
-                    },
-                    body: formData
-                });
-                
-                if (response.ok) {
-                    // Success! Increment usage
-                    if (window.firebaseIncrementApiKeyUsage) {
+                // Try to increment usage if Firebase is available
+                try {
+                    if (window.firebaseIncrementApiKeyUsage && !keyInfo.id.startsWith('fallback_')) {
                         await window.firebaseIncrementApiKeyUsage(keyInfo.id);
                     }
-                    console.log(`✅ Success with key ${keyInfo.id}`);
-                    
-                    const blob = await response.blob();
-                    return new Promise((resolve) => {
-                        const reader = new FileReader();
-                        reader.onload = () => resolve(reader.result);
-                        reader.readAsDataURL(blob);
-                    });
-                } 
-                else if (response.status === 402) {
-                    // Payment required - mark as exhausted
-                    console.warn(`💳 Key ${keyInfo.id} limit reached, marking as exhausted`);
-                    if (window.firebaseMarkApiKeyExhausted) {
-                        await window.firebaseMarkApiKeyExhausted(keyInfo.id);
-                    }
-                    // Continue to next key
-                } 
-                else {
-                    console.warn(`API error ${response.status} with key ${keyInfo.id}`);
-                    // For other errors, try next key without marking as exhausted
+                } catch (e) {
+                    console.warn('Failed to increment usage:', e);
                 }
                 
-            } catch (fetchError) {
-                console.warn(`Network error with key ${keyInfo.id}:`, fetchError.message);
-                // Continue to next key
+                const blob = await response.blob();
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.readAsDataURL(blob);
+                });
             }
+            else if (response.status === 402) {
+                console.warn(`❌ Key ${keyInfo.id} exhausted (payment required)`);
+                
+                // Try to mark as exhausted if Firebase is available
+                try {
+                    if (window.firebaseMarkApiKeyExhausted && !keyInfo.id.startsWith('fallback_')) {
+                        await window.firebaseMarkApiKeyExhausted(keyInfo.id);
+                    }
+                } catch (e) {
+                    console.warn('Failed to mark as exhausted:', e);
+                }
+            }
+            else {
+                console.warn(`❌ Key ${keyInfo.id} failed with status ${response.status}`);
+            }
+            
+        } catch (fetchError) {
+            console.warn(`❌ Network error with key ${keyInfo.id}:`, fetchError.message);
         }
-        
-        // If we get here, all attempts failed
-        throw new Error('Background removal failed with all available API keys');
-        
-    } catch (error) {
-        console.error('Background removal failed:', error);
-        throw error;
     }
+    
+    // All keys failed
+    throw new Error('All API keys failed or are exhausted');
 }
 
 // Handle form submission

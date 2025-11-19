@@ -190,7 +190,12 @@ async function getAllAvailableApiKeys() {
       const data = docSnapshot.data();
       const usageThisMonth = data.usage?.[currentMonth] || 0;
       
-      if (usageThisMonth < 45) {
+      console.log(`Processing doc ${docSnapshot.id}:`, {
+        apiKey: data.apiKey,
+        usage: usageThisMonth
+      });
+      
+      if (usageThisMonth < 45 && data.apiKey) {
         availableKeys.push({
           id: docSnapshot.id,
           apiKey: data.apiKey,
