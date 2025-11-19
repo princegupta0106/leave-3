@@ -159,40 +159,49 @@ async function loadUserLeaveData(email) {
   }
 }
 
-// API Key Management System
-async function getAvailableApiKey() {
+// API Key Management System - Simplified approach
+async function getAllAvailableApiKeys() {
   try {
     const apiKeysRef = collection(db, 'pi');
     const snapshot = await getDocs(apiKeysRef);
     
     if (snapshot.empty) {
       console.warn('No API keys found in database');
-      return null;
+      return [];
     }
     
     const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+    const availableKeys = [];
     
-    // Find an API key with usage < 45 for current month
-    for (const docSnapshot of snapshot.docs) {
+    // Load all keys and filter those under limit
+    snapshot.docs.forEach(docSnapshot => {
       const data = docSnapshot.data();
       const usageThisMonth = data.usage?.[currentMonth] || 0;
       
       if (usageThisMonth < 45) {
-        console.log(`Using API key: ${docSnapshot.id}, usage this month: ${usageThisMonth}/45`);
-        return {
+        availableKeys.push({
           id: docSnapshot.id,
           apiKey: data.apiKey,
           usageThisMonth: usageThisMonth
-        };
+        });
       }
-    }
+    });
     
-    console.warn('All API keys have reached monthly limit (45 uses)');
-    return null;
+    // Sort by usage (lowest first)
+    availableKeys.sort((a, b) => a.usageThisMonth - b.usageThisMonth);
+    
+    console.log(`Found ${availableKeys.length} available API keys`);
+    return availableKeys;
   } catch (error) {
     console.error('Error fetching API keys:', error);
-    return null;
+    return [];
   }
+}
+
+// Keep the old function for backward compatibility but make it use the new one
+async function getAvailableApiKey() {
+  const keys = await getAllAvailableApiKeys();
+  return keys.length > 0 ? keys[0] : null;
 }
 
 async function incrementApiKeyUsage(keyId) {
@@ -263,6 +272,7 @@ async function initializeApiKeys(apiKeysArray) {
 window.firebaseSaveUserLeaveData = saveUserLeaveData;
 window.firebaseLoadUserLeaveData = loadUserLeaveData;
 window.firebaseGetCurrentUser = () => auth.currentUser || null;
+window.firebaseGetAllAvailableApiKeys = getAllAvailableApiKeys;
 window.firebaseGetAvailableApiKey = getAvailableApiKey;
 window.firebaseIncrementApiKeyUsage = incrementApiKeyUsage;
 window.firebaseMarkApiKeyExhausted = markApiKeyExhausted;

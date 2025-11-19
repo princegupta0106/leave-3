@@ -257,71 +257,74 @@ function updateSignaturePreview(imageData) {
     }
 }
 
-// Remove background using remove.bg API with Firebase key management and auto-retry
+// Remove background using remove.bg API - Simplified and robust
 async function removeBackground(imageFile) {
-    const formData = new FormData();
-    formData.append('image_file', imageFile);
-    formData.append('size', 'auto');
-    
-    // Maximum retry attempts
-    const maxRetries = 5;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            // Get available API key from Firebase
-            const apiKeyInfo = await window.firebaseGetAvailableApiKey();
+    try {
+        // Get ALL available API keys (usage < 45) upfront
+        const availableKeys = await window.firebaseGetAllAvailableApiKeys();
+        
+        if (!availableKeys || availableKeys.length === 0) {
+            throw new Error('No available API keys - all have reached monthly limit (45 uses)');
+        }
+        
+        console.log(`Found ${availableKeys.length} available API keys`);
+        
+        const formData = new FormData();
+        formData.append('image_file', imageFile);
+        formData.append('size', 'auto');
+        
+        // Try maximum 2 keys
+        const maxTries = Math.min(2, availableKeys.length);
+        
+        for (let i = 0; i < maxTries; i++) {
+            const keyInfo = availableKeys[i];
             
-            if (!apiKeyInfo) {
-                throw new Error('No available API keys - all have reached monthly limit');
-            }
-            
-            console.log(`Attempt ${attempt}: Using API key ${apiKeyInfo.id} (usage: ${apiKeyInfo.usageThisMonth}/45)`);
-            
-            const response = await fetch('https://api.remove.bg/v1.0/removebg', {
-                method: 'POST',
-                headers: {
-                    'X-Api-Key': apiKeyInfo.apiKey
-                },
-                body: formData
-            });
-            
-            if (response.ok) {
-                // Success! Increment usage count for this API key
-                await window.firebaseIncrementApiKeyUsage(apiKeyInfo.id);
-                console.log(`✅ Background removal successful with key ${apiKeyInfo.id}`);
+            try {
+                console.log(`Trying API key ${keyInfo.id} (usage: ${keyInfo.usageThisMonth}/45)`);
                 
-                const blob = await response.blob();
-                return new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result);
-                    reader.readAsDataURL(blob);
+                const response = await fetch('https://api.remove.bg/v1.0/removebg', {
+                    method: 'POST',
+                    headers: {
+                        'X-Api-Key': keyInfo.apiKey
+                    },
+                    body: formData
                 });
-            } else if (response.status === 402) {
-                // Payment required - mark this key as exhausted and try next
-                console.warn(`💳 Payment required for key ${apiKeyInfo.id}, marking as exhausted`);
-                await window.firebaseMarkApiKeyExhausted(apiKeyInfo.id);
                 
-                if (attempt < maxRetries) {
-                    console.log(`🔄 Retrying with next available API key...`);
-                    continue; // Try next available key
-                } else {
-                    throw new Error('All API keys exhausted - payment required');
+                if (response.ok) {
+                    // Success! Increment usage
+                    await window.firebaseIncrementApiKeyUsage(keyInfo.id);
+                    console.log(`✅ Success with key ${keyInfo.id}`);
+                    
+                    const blob = await response.blob();
+                    return new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.readAsDataURL(blob);
+                    });
+                } 
+                else if (response.status === 402) {
+                    // Payment required - mark as exhausted
+                    console.warn(`💳 Key ${keyInfo.id} limit reached, marking as exhausted`);
+                    await window.firebaseMarkApiKeyExhausted(keyInfo.id);
+                    // Continue to next key
+                } 
+                else {
+                    console.warn(`API error ${response.status} with key ${keyInfo.id}`);
+                    // For other errors, try next key without marking as exhausted
                 }
-            } else {
-                throw new Error(`API request failed with status: ${response.status}`);
-            }
-        } catch (error) {
-            console.error(`Attempt ${attempt} failed:`, error);
-            
-            if (attempt === maxRetries) {
-                throw error; // Re-throw on final attempt
-            }
-            
-            // For non-payment errors, wait a bit before retry
-            if (!error.message.includes('payment')) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+            } catch (fetchError) {
+                console.warn(`Network error with key ${keyInfo.id}:`, fetchError.message);
+                // Continue to next key
             }
         }
+        
+        // If we get here, all attempts failed
+        throw new Error('Background removal failed with all available API keys');
+        
+    } catch (error) {
+        console.error('Background removal failed:', error);
+        throw error;
     }
 }
 
