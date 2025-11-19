@@ -11,7 +11,11 @@ import {
   getFirestore,
   doc,
   setDoc,
-  getDoc
+  getDoc,
+  collection,
+  getDocs,
+  updateDoc,
+  increment
 } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-firestore.js";
 
 // Your Firebase configuration (from user snippet)
@@ -155,10 +159,93 @@ async function loadUserLeaveData(email) {
   }
 }
 
+// API Key Management System
+async function getAvailableApiKey() {
+  try {
+    const apiKeysRef = collection(db, 'pi');
+    const snapshot = await getDocs(apiKeysRef);
+    
+    if (snapshot.empty) {
+      console.warn('No API keys found in database');
+      return null;
+    }
+    
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+    
+    // Find an API key with usage < 45 for current month
+    for (const docSnapshot of snapshot.docs) {
+      const data = docSnapshot.data();
+      const usageThisMonth = data.usage?.[currentMonth] || 0;
+      
+      if (usageThisMonth < 45) {
+        console.log(`Using API key: ${docSnapshot.id}, usage this month: ${usageThisMonth}/45`);
+        return {
+          id: docSnapshot.id,
+          apiKey: data.apiKey,
+          usageThisMonth: usageThisMonth
+        };
+      }
+    }
+    
+    console.warn('All API keys have reached monthly limit (45 uses)');
+    return null;
+  } catch (error) {
+    console.error('Error fetching API keys:', error);
+    return null;
+  }
+}
+
+async function incrementApiKeyUsage(keyId) {
+  try {
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM format
+    const keyRef = doc(db, 'pi', keyId);
+    
+    // Increment usage for current month
+    await updateDoc(keyRef, {
+      [`usage.${currentMonth}`]: increment(1),
+      lastUsed: new Date().toISOString()
+    });
+    
+    console.log(`Incremented usage for API key: ${keyId}`);
+    return true;
+  } catch (error) {
+    console.error('Error incrementing API key usage:', error);
+    return false;
+  }
+}
+
+// Initialize API keys (run this once to set up your API keys)
+async function initializeApiKeys(apiKeysArray) {
+  try {
+    for (let i = 0; i < apiKeysArray.length; i++) {
+      const keyId = `key_${i + 1}`;
+      const keyRef = doc(db, 'pi', keyId);
+      
+      // Check if key already exists
+      const existingDoc = await getDoc(keyRef);
+      if (!existingDoc.exists()) {
+        await setDoc(keyRef, {
+          apiKey: apiKeysArray[i],
+          usage: {}, // Object to store monthly usage: { "2025-11": 5, "2025-12": 0 }
+          createdAt: new Date().toISOString(),
+          lastUsed: null
+        });
+        console.log(`Initialized API key ${keyId}`);
+      }
+    }
+    console.log('API keys initialization complete');
+  } catch (error) {
+    console.error('Error initializing API keys:', error);
+  }
+}
+
 // Expose helper functions to window for use in other scripts
 window.firebaseSaveUserLeaveData = saveUserLeaveData;
 window.firebaseLoadUserLeaveData = loadUserLeaveData;
 window.firebaseGetCurrentUser = () => auth.currentUser || null;
+window.firebaseGetAvailableApiKey = getAvailableApiKey;
+window.firebaseIncrementApiKeyUsage = incrementApiKeyUsage;
+window.firebaseInitializeApiKeys = initializeApiKeys;
 
 // Note: sign-in with popup requires a secure context (http(s)). If you're testing
 // locally, run a simple HTTP server (e.g. `npx http-server` or `python -m http.server`).

@@ -257,22 +257,34 @@ function updateSignaturePreview(imageData) {
     }
 }
 
-// Remove background using remove.bg API
+// Remove background using remove.bg API with Firebase key management
 async function removeBackground(imageFile) {
     const formData = new FormData();
     formData.append('image_file', imageFile);
     formData.append('size', 'auto');
     
     try {
+        // Get available API key from Firebase
+        const apiKeyInfo = await window.firebaseGetAvailableApiKey();
+        
+        if (!apiKeyInfo) {
+            throw new Error('No available API keys - all have reached monthly limit');
+        }
+        
+        console.log('Using API key for background removal:', apiKeyInfo.id);
+        
         const response = await fetch('https://api.remove.bg/v1.0/removebg', {
             method: 'POST',
             headers: {
-                'X-Api-Key': 'uEMhzVB2ytTm2gyzVDatCWg7'
+                'X-Api-Key': apiKeyInfo.apiKey
             },
             body: formData
         });
         
         if (response.ok) {
+            // Increment usage count for this API key
+            await window.firebaseIncrementApiKeyUsage(apiKeyInfo.id);
+            
             const blob = await response.blob();
             return new Promise((resolve) => {
                 const reader = new FileReader();
@@ -280,9 +292,10 @@ async function removeBackground(imageFile) {
                 reader.readAsDataURL(blob);
             });
         } else {
-            throw new Error('API request failed');
+            throw new Error(`API request failed with status: ${response.status}`);
         }
     } catch (error) {
+        console.error('Background removal error:', error);
         throw error;
     }
 }
@@ -619,3 +632,35 @@ document.getElementById('resetForm').addEventListener('click', function() {
     
     console.log('Form reset, preview cleared');
 });
+
+// Admin function to initialize API keys (call this once in browser console)
+window.initRemoveBgApiKeys = async function(apiKeys) {
+    if (!Array.isArray(apiKeys) || apiKeys.length === 0) {
+        console.error('Please provide an array of API keys');
+        return;
+    }
+    
+    try {
+        await window.firebaseInitializeApiKeys(apiKeys);
+        console.log('✅ API keys initialized successfully!');
+        console.log('Keys added:', apiKeys.length);
+    } catch (error) {
+        console.error('❌ Failed to initialize API keys:', error);
+    }
+};
+
+// Admin function to check API key status
+window.checkApiKeyStatus = async function() {
+    try {
+        const keyInfo = await window.firebaseGetAvailableApiKey();
+        if (keyInfo) {
+            console.log('✅ Available API key found:');
+            console.log(`Key ID: ${keyInfo.id}`);
+            console.log(`Usage this month: ${keyInfo.usageThisMonth}/45`);
+        } else {
+            console.log('❌ No available API keys (all at limit)');
+        }
+    } catch (error) {
+        console.error('Error checking API key status:', error);
+    }
+};
